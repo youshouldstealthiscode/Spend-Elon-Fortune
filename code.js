@@ -605,9 +605,9 @@ function renderElements() {
     newElement.innerHTML = `<img src="${element.image}" alt="${element.name}" />
     <p id="name">${element.name}</p>
     <span id="price">USD ${formatMoney(element.price)}</span>
-    <div class="buyAndSellContainer" data-price="${element.price}" data-amount="0">
-      <button class="btn-sell" id="sell" disabled>-</button>
-      <input type="number" class="amount-input" id="amount" min="0" value="0" />
+    <div class="buyAndSellContainer" data-price="${element.price}" data-amount="${element.amount}">
+      <button class="btn-sell" id="sell" ${element.amount ? '' : 'disabled'}>-</button>
+      <input type="number" class="amount-input" id="amount" min="0" value="${element.amount}" />
       <button class="btn-buy" id="buy">+</button>
     </div>`;
 
@@ -618,6 +618,8 @@ function renderElements() {
 async function updateData() {
   await loadRichestPeople();
   elements = [];
+  receiptItemsArr = [];
+  document.querySelector('#receipt-container').innerHTML = '<h1>Receipt</h1>';
   preLoad();
   await loadCpiItems();
   await loadWorldIssues();
