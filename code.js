@@ -2,68 +2,140 @@
 // Elements
 let totalMoneyElement = document.querySelector("#totalMoney");
 let percentageElement = document.querySelector("#percentageLeft");
-let buyButtons = document.querySelectorAll("#buy");
-let sellButtons = document.querySelectorAll("#sell");
 const appContainer = document.querySelector(".app-container");
+const personSelect = document.querySelector("#personSelect");
+const incomeInput = document.querySelector("#incomeInput");
+const expensesInput = document.querySelector("#expensesInput");
+const calcTimeBtn = document.querySelector("#calcTime");
+const timeResult = document.querySelector("#timeResult");
 
 // Default data
-let elonFortune = 245000000000;
+let startingFortune = 245000000000;
+let currentFortune = startingFortune;
 let totalPercentage = 100;
 
 let elements = [];
+let richestPeople = [];
+let worldIssues = [];
+
+async function loadJSON(url, fallback) {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('fail');
+    return await r.json();
+  } catch (e) {
+    const r = await fetch(fallback);
+    return await r.json();
+  }
+}
+
+async function loadRichestPeople() {
+  richestPeople = await loadJSON(
+    'https://example.com/data/richest_people.json',
+    'data/richest_people.json'
+  );
+  personSelect.innerHTML = '';
+  richestPeople.forEach((person, index) => {
+    const opt = document.createElement('option');
+    opt.value = person.net_worth;
+    opt.textContent = person.name;
+    if (index === 0) opt.selected = true;
+    personSelect.appendChild(opt);
+  });
+  startingFortune = Number(personSelect.value);
+  currentFortune = startingFortune;
+  personSelect.addEventListener('change', () => {
+    startingFortune = Number(personSelect.value);
+    currentFortune = startingFortune;
+    totalPercentage = 100;
+    updateTotalAndPercentage();
+  });
+}
+
+async function loadCpiItems() {
+  const items = await loadJSON(
+    'https://example.com/data/cpi_items.json',
+    'data/cpi_items.json'
+  );
+  items.forEach((item) =>
+    createAndSaveElement(item.name, item.price, './img/usd-circle.svg')
+  );
+}
+
+async function loadWorldIssues() {
+  worldIssues = await loadJSON(
+    'https://example.com/data/world_issues.json',
+    'data/world_issues.json'
+  );
+  worldIssues.forEach((item) =>
+    createAndSaveElement(item.name, item.price, './img/usd-circle.svg')
+  );
+}
+
+async function init() {
+  await loadRichestPeople();
+  preLoad();
+  await loadCpiItems();
+  await loadWorldIssues();
+  renderElements();
+  updateTotalAndPercentage();
+  setInterval(updateData, 8 * 60 * 60 * 1000);
+}
 
 // Events
 appContainer.addEventListener("click", (e) => {
-  let element = e.target.parentElement;
-
+  const container = e.target.closest(".buyAndSellContainer");
+  if (!container) return;
   if (e.target.classList.contains("btn-buy")) {
-    buyItem(element);
+    buyItem(container);
   } else if (e.target.classList.contains("btn-sell")) {
-    sellItem(element);
+    sellItem(container);
+  }
+});
+
+appContainer.addEventListener("change", (e) => {
+  if (e.target.classList.contains("amount-input")) {
+    const container = e.target.closest(".buyAndSellContainer");
+    setItemAmount(container, e.target.value);
   }
 });
 
 // Buy item
 function buyItem(element) {
-  // change default data to new data
-
-  if (elonFortune - Number(element.dataset.price) >= 0) {
-    elonFortune -= Number(element.dataset.price);
-    totalPercentage = (elonFortune * 100) / 245000000000;
-
-    // Item name
-    let itemName = element.parentElement.querySelector("#name").textContent;
-
-    // get span to increment by one
-    let amountOfItems = element.querySelector("#amount");
-    amountOfItems.textContent = `${Number(amountOfItems.textContent) + 1}`;
-
-    // get button to enable it when item is more than 0
-    let button = element.querySelector("#sell");
-    if (Number(amountOfItems.textContent) > 0) {
-      button.disabled = false;
-    }
-
-    updateTotalAndPercentage();
-
-    // Create (if its new) or update recipt item(if it already exists)
-    createReciptItem(
-      itemName,
-      Number(amountOfItems.textContent),
-      formatMoney(
-        Number(element.dataset.price) * Number(amountOfItems.textContent)
-      )
-    );
-
-    updateReceipt();
-  } else {
-    cantAffordAlert();
-  }
+  setItemAmount(element, Number(element.dataset.amount) + 1);
 }
 
 function cantAffordAlert() {
   totalMoneyElement.innerHTML = `<p class="totalMoney">Can't afford that!</p>`;
   percentageElement.innerHTML = `<p class ="percentageLeft">Sell something!</p>`;
+}
+
+function setItemAmount(container, newAmount) {
+  newAmount = Math.max(0, Math.floor(newAmount));
+  const price = Number(container.dataset.price);
+  const oldAmount = Number(container.dataset.amount);
+  const diff = newAmount - oldAmount;
+  if (diff > 0) {
+    const cost = diff * price;
+    if (currentFortune - cost < 0) {
+      cantAffordAlert();
+      container.querySelector('#amount').value = oldAmount;
+      return;
+    }
+    currentFortune -= cost;
+  } else if (diff < 0) {
+    currentFortune += -diff * price;
+  }
+  container.dataset.amount = newAmount;
+  const input = container.querySelector('#amount');
+  input.value = newAmount;
+  const sellBtn = container.querySelector('#sell');
+  sellBtn.disabled = newAmount === 0;
+  const itemName = container.parentElement.querySelector('#name').textContent;
+  totalPercentage = (currentFortune * 100) / startingFortune;
+  createReciptItem(itemName, newAmount, formatMoney(price * newAmount));
+  updateTotalAndPercentage();
+  updateReceipt();
 }
 
 function createReciptItem(name, amount, total) {
@@ -81,40 +153,12 @@ function createReciptItem(name, amount, total) {
 
 // Sell Item
 function sellItem(element) {
-  // change default data to new data
-
-  elonFortune += Number(element.dataset.price);
-  totalPercentage = (elonFortune * 100) / 245000000000;
-
-  // Item name
-  let itemName = element.parentElement.querySelector("p").textContent;
-
-  // get span to decrement by one
-  let amountOfItems = element.querySelector("span");
-  amountOfItems.textContent = `${Number(amountOfItems.textContent) - 1}`;
-
-  // get button to disable when item is less than 0
-  let button = element.querySelector("#sell");
-
-  if (Number(amountOfItems.textContent) === 0) {
-    button.disabled = true;
-  }
-  updateTotalAndPercentage();
-
-  createReciptItem(
-    itemName,
-    Number(amountOfItems.textContent),
-    formatMoney(
-      Number(element.dataset.price) * Number(amountOfItems.textContent)
-    )
-  );
-
-  updateReceipt();
+  setItemAmount(element, Number(element.dataset.amount) - 1);
 }
 
 function updateTotalAndPercentage() {
   totalMoneyElement.innerHTML = `<p class="totalMoney">Remaining: ${formatMoney(
-    elonFortune
+    currentFortune
   )} USD</p>`;
   percentageElement.innerHTML = `<p class ="percentageLeft">You only spent ${(
     100 - totalPercentage
@@ -124,6 +168,32 @@ function updateTotalAndPercentage() {
 // Format Money Function
 function formatMoney(number) {
   return number.toString().replace(/(\d)(?=(\d\d\d)+(?!\d))/g, "$1,");
+}
+
+function formatDuration(seconds) {
+  const units = [
+    ['millennium', 31557600000],
+    ['century', 3155760000],
+    ['decade', 315576000],
+    ['year', 31557600],
+    ['month', 2629800],
+    ['week', 604800],
+    ['day', 86400],
+    ['hour', 3600],
+    ['minute', 60],
+    ['second', 1],
+  ];
+  let remaining = seconds;
+  const parts = [];
+  for (const [name, value] of units) {
+    const qty = Math.floor(remaining / value);
+    if (qty > 0) {
+      parts.push(`${qty} ${name}${qty > 1 ? 's' : ''}`);
+      remaining -= qty * value;
+    }
+  }
+  if (parts.length === 0) return '0 seconds';
+  return parts.join(', ');
 }
 
 // Class to create unique receipt items
@@ -177,7 +247,7 @@ function updateReceiptItem(receiptItem) {
 function updateReceipt() {
   let title = `<h1>Receipt</h1>`;
   let receipt = "";
-  let total = formatMoney(245000000000 - elonFortune);
+  let total = formatMoney(startingFortune - currentFortune);
 
   for (let i = 0; i < receiptItemsArr.length; i++) {
     let itemX = receiptItemsArr[i];
@@ -218,8 +288,6 @@ function createAndSaveElement(elementName, price, image) {
     elements.push(newElement);
   }
 }
-
-preLoad();
 
 function preLoad() {
   createAndSaveElement("AirPods Pro", 249, "https://i.imgur.com/9QtYXwu.jpg");
@@ -527,19 +595,48 @@ function preLoad() {
   );
 }
 
-elements.forEach((element) => {
-  let newElement = document.createElement("div");
+function renderElements() {
+  appContainer.innerHTML = "";
+  elements.forEach((element) => {
+    let newElement = document.createElement("div");
 
-  newElement.classList.add("element");
+    newElement.classList.add("element");
 
-  newElement.innerHTML = `<img src="${element.image}" alt="${element.name}" />
-  <p id="name">${element.name}</p>
-  <span id="price">USD ${formatMoney(element.price)}</span>
-  <div class="buyAndSellContainer" data-price="${element.price}">
-    <button class="btn-sell" id="sell" disabled>Sell</button>
-    <span id="amount">${element.amount}</span>
-    <button class="btn-buy" id="buy" >Buy</button>
-  </div>`;
+    newElement.innerHTML = `<img src="${element.image}" alt="${element.name}" />
+    <p id="name">${element.name}</p>
+    <span id="price">USD ${formatMoney(element.price)}</span>
+    <div class="buyAndSellContainer" data-price="${element.price}" data-amount="0">
+      <button class="btn-sell" id="sell" disabled>-</button>
+      <input type="number" class="amount-input" id="amount" min="0" value="0" />
+      <button class="btn-buy" id="buy">+</button>
+    </div>`;
 
-  appContainer.appendChild(newElement);
-});
+    appContainer.appendChild(newElement);
+  });
+}
+
+async function updateData() {
+  await loadRichestPeople();
+  elements = [];
+  preLoad();
+  await loadCpiItems();
+  await loadWorldIssues();
+  renderElements();
+  updateTotalAndPercentage();
+}
+
+if (calcTimeBtn) {
+  calcTimeBtn.addEventListener('click', () => {
+    const income = Number(incomeInput.value);
+    const expenses = Number(expensesInput.value);
+    const yearlySavings = income - expenses * 12;
+    if (yearlySavings <= 0) {
+      timeResult.textContent = 'You would never reach this amount at this rate.';
+      return;
+    }
+    const seconds = (startingFortune / yearlySavings) * 31557600;
+    timeResult.textContent = formatDuration(seconds);
+  });
+}
+
+init();
