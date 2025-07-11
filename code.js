@@ -13,40 +13,116 @@ let currentFortune = startingFortune;
 let totalPercentage = 100;
 
 let elements = [];
-let richestPeople = [];
+let richestPeople = [
+  {
+    "name": "Bernard Arnault",
+    "net_worth": 210000000000
+  },
+  {
+    "name": "Elon Musk",
+    "net_worth": 200000000000
+  },
+  {
+    "name": "Jeff Bezos",
+    "net_worth": 190000000000
+  },
+  {
+    "name": "Larry Ellison",
+    "net_worth": 155000000000
+  },
+  {
+    "name": "Mark Zuckerberg",
+    "net_worth": 150000000000
+  },
+  {
+    "name": "Bill Gates",
+    "net_worth": 130000000000
+  },
+  {
+    "name": "Warren Buffett",
+    "net_worth": 120000000000
+  },
+  {
+    "name": "Larry Page",
+    "net_worth": 115000000000
+  },
+  {
+    "name": "Sergey Brin",
+    "net_worth": 110000000000
+  },
+  {
+    "name": "Steve Ballmer",
+    "net_worth": 105000000000
+  }
+];
 
-async function loadRichestPeople() {
-  const resp = await fetch('data/richest_people.json');
-  richestPeople = await resp.json();
-  richestPeople.forEach((person, index) => {
-    const opt = document.createElement('option');
-    opt.value = person.net_worth;
-    opt.textContent = person.name;
-    if (index === 0) opt.selected = true;
-    personSelect.appendChild(opt);
-  });
-  startingFortune = Number(personSelect.value);
-  currentFortune = startingFortune;
-  personSelect.addEventListener('change', () => {
+// CPI items data embedded directly
+const cpiItemsData = [
+  {"name": "Loaf of Bread", "price": 3},
+  {"name": "Gallon of Milk", "price": 4},
+  {"name": "Dozen Eggs", "price": 5},
+  {"name": "Pound of Chicken", "price": 6},
+  {"name": "Coffee (1 lb)", "price": 8},
+  {"name": "Monthly Rent", "price": 1300},
+  {"name": "Electricity Bill", "price": 120},
+  {"name": "Natural Gas Bill", "price": 90},
+  {"name": "Bus Fare", "price": 3},
+  {"name": "Gasoline (gallon)", "price": 3.8},
+  {"name": "Doctor Visit", "price": 150},
+  {"name": "Prescription Drugs", "price": 50},
+  {"name": "Movie Ticket", "price": 12},
+  {"name": "College Tuition (year)", "price": 12000},
+  {"name": "Cell Phone Plan", "price": 70},
+  {"name": "Haircut", "price": 25}
+];
+
+function loadRichestPeople() {
+  try {
+    // Since we're likely opening this from a file:// URL, which has CORS restrictions,
+    // we'll use the embedded data directly as it matches the JSON file
+    console.log("Using embedded richest people data");
+    
+    // Populate the select dropdown
+    richestPeople.forEach((person, index) => {
+      const opt = document.createElement('option');
+      opt.value = person.net_worth;
+      opt.textContent = person.name;
+      if (index === 0) opt.selected = true;
+      personSelect.appendChild(opt);
+    });
+    
     startingFortune = Number(personSelect.value);
     currentFortune = startingFortune;
-    totalPercentage = 100;
-    updateTotalAndPercentage();
-  });
+    personSelect.addEventListener('change', () => {
+      startingFortune = Number(personSelect.value);
+      currentFortune = startingFortune;
+      totalPercentage = 100;
+      updateTotalAndPercentage();
+    });
+  } catch (error) {
+    console.error("Error loading richest people data:", error);
+  }
 }
 
-async function loadCpiItems() {
-  const resp = await fetch('data/cpi_items.json');
-  const items = await resp.json();
-  items.forEach((item) =>
-    createAndSaveElement(item.name, item.price, './img/usd-circle.svg')
-  );
+function loadCpiItems() {
+  try {
+    // Since we're likely opening this from a file:// URL, which has CORS restrictions,
+    // we'll use the embedded data directly as it matches the JSON file
+    console.log("Using embedded CPI items data");
+    
+    // Create elements for each CPI item
+    cpiItemsData.forEach((item) =>
+      createAndSaveElement(item.name, item.price, './img/usd-circle.svg')
+    );
+  } catch (error) {
+    console.error("Error loading CPI items data:", error);
+  }
 }
 
-async function init() {
-  await loadRichestPeople();
+function init() {
+  loadRichestPeople();
   preLoad();
-  await loadCpiItems();
+  loadCpiItems();
   renderElements();
   updateTotalAndPercentage();
 }
@@ -106,10 +182,7 @@ function cantAffordAlert() {
 }
 
 function createReciptItem(name, amount, total) {
-  let receiptItem = new ReceiptItem();
-  receiptItem.name = name;
-  receiptItem.amount = amount;
-  receiptItem.total = total;
+  let receiptItem = new ReceiptItem(name, amount, total);
 
   if (!checkReceiptItemExists(receiptItem)) {
     receiptItemsArr.push(receiptItem);
@@ -126,7 +199,7 @@ function sellItem(element) {
   totalPercentage = (currentFortune * 100) / startingFortune;
 
   // Item name
-  let itemName = element.parentElement.querySelector("p").textContent;
+  let itemName = element.parentElement.querySelector("#name").textContent;
 
   // get span to decrement by one
   let amountOfItems = element.querySelector("span");
@@ -167,10 +240,28 @@ function formatMoney(number) {
 
 // Class to create unique receipt items
 class ReceiptItem {
-  constructor() {
-    this.name;
-    this.amount;
-    this.total;
+  constructor(name = "", amount = 0, total = "") {
+    this.name = name;
+    this.amount = amount;
+    this.total = total;
+  }
+  
+  // Method to update item properties
+  update(name, amount, total) {
+    this.name = name;
+    this.amount = amount;
+    this.total = total;
+    return this;
+  }
+  
+  // Method to check if this item matches another by name
+  matchesName(itemName) {
+    return this.name === itemName;
+  }
+  
+  // Method to format the item for display
+  formatForReceipt() {
+    return `<p>${this.name} x <strong>${this.amount}</strong>..............$ ${this.total}</p>`;
   }
 }
 
@@ -178,37 +269,20 @@ let receiptItemsArr = [];
 
 // Function that check if that receipt items its already added on the array
 function checkReceiptItemExists(receiptItem) {
-  let i = 0;
-  let exists = false;
-
-  while (!exists && i < receiptItemsArr.length) {
-    let itemX = receiptItemsArr[i];
-    if (itemX.name === receiptItem.name) {
-      exists = true;
+  for (const item of receiptItemsArr) {
+    if (item.matchesName(receiptItem.name)) {
+      return true;
     }
-    i++;
   }
-
-  return exists;
+  return false;
 }
 
 function updateReceiptItem(receiptItem) {
-  let i = 0;
-  let itemInArr = null;
-
-  while (itemInArr === null && i < receiptItemsArr.length) {
-    let itemX = receiptItemsArr[i];
-
-    if (itemX.name === receiptItem.name) {
-      itemInArr = itemX;
+  for (const item of receiptItemsArr) {
+    if (item.matchesName(receiptItem.name)) {
+      item.update(receiptItem.name, receiptItem.amount, receiptItem.total);
+      return;
     }
-    i++;
-  }
-
-  if (itemInArr) {
-    itemInArr.name = receiptItem.name;
-    itemInArr.amount = receiptItem.amount;
-    itemInArr.total = receiptItem.total;
   }
 }
 
@@ -218,11 +292,9 @@ function updateReceipt() {
   let receipt = "";
   let total = formatMoney(startingFortune - currentFortune);
 
-  for (let i = 0; i < receiptItemsArr.length; i++) {
-    let itemX = receiptItemsArr[i];
-
+  for (const itemX of receiptItemsArr) {
     if (itemX.amount !== 0) {
-      receipt += `<p>${itemX.name} x <strong> ${itemX.amount}</strong>..............$ ${itemX.total}</p>`;
+      receipt += itemX.formatForReceipt();
     }
   }
 
@@ -232,10 +304,59 @@ function updateReceipt() {
 
 // Function to print
 function printSection(el) {
-  let printsection = document.getElementById(el).innerHTML;
-  document.body.innerHTML = printsection;
-
-  window.print();
+  // Create a new window for printing
+  const printWindow = window.open('', '_blank');
+  
+  // Get the receipt content
+  const receiptContent = document.getElementById(el).innerHTML;
+  
+  // Create a simple HTML document with just the receipt
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Receipt</title>
+      <style>
+        body {
+          font-family: "Poppins", sans-serif;
+          padding: 20px;
+        }
+        h1 {
+          font-size: 24px;
+          margin-bottom: 20px;
+        }
+        p {
+          font-size: 16px;
+          margin: 8px 0;
+        }
+        .totalRecipt {
+          font-size: 20px;
+          text-decoration: underline;
+          margin-top: 20px;
+        }
+      </style>
+    </head>
+    <body>
+      ${receiptContent}
+    </body>
+    </html>
+  `;
+  
+  // Use document.open() to open a document stream for writing
+  printWindow.document.open();
+  
+  // Write the content to the document
+  printWindow.document.documentElement.innerHTML = htmlContent;
+  
+  // Close the document for writing
+  printWindow.document.close();
+  
+  // Wait for the document to fully load before printing
+  printWindow.onload = function() {
+    printWindow.print();
+    // Close the window after printing (optional)
+    // printWindow.close();
+  };
 }
 
 // Element class - preload data - generate html elements
